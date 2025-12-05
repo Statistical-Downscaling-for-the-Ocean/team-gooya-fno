@@ -20,7 +20,7 @@ def load_ctd_data(ctd_data_file, start_year, end_year):
     Returns an xarray.Dataset with dimensions (depth, station, time)).
     """
     
-    df_all = pd.read_csv(data_dir, comment="#")
+    df_all = pd.read_csv(ctd_data_file, comment="#")
 
     df_all["TIME"] = pd.to_datetime(df_all["TIME"], format="%Y-%m-%d %H:%M:%S")
     df_all = df_all.rename(
@@ -223,7 +223,7 @@ def prepare_data(
     #stations = ["P22", "P23", "P24", "P25", "P26"]
     #depths = [0.5, 10.5, 50.5, 100.5]
 
-    ctd_filename = data_dir / "lineP_CTD_training.csv"
+    ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
     start_year, end_year = year_range
     ds = load_ctd_data(ctd_filename, start_year, end_year)
 
@@ -233,7 +233,7 @@ def prepare_data(
         station_numbers = [s.lstrip("P") for s in stations]
         print(station_numbers)
         print(ds.station)
-        ds = ds.sel(station=station_numbers)
+        ds = ds.sel(station=stations)
 
     #### For now to test but to be removed later ####
     print('==========================================================\n'+

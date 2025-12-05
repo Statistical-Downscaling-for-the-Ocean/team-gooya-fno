@@ -29,7 +29,7 @@ def denormalize_variable(var_name, data_norm, scale_params):
 def evaluate_model(model, test_loader, target_variable="Temperature", stations=None, depths=None, work_dir=Path(".")):
 
     plot_dir = work_dir / "plots"
-    plot_dir.mkdir(Parents=True, exist_ok=True)
+    plot_dir.mkdir(parents=True, exist_ok=True)
     units = {
         'Temperature': 'deg C',
         'Salinity': 'PSU',

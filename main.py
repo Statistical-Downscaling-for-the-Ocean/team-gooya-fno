@@ -31,11 +31,9 @@ def main(output_dir, data_dir):
     # === Prepare Data ===
     # main_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/FNO"
     # data_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/data" 
-    
-    main_dir = "/path/to/my/projects/line_p/"
-    data_dir = "/path/to/my/projects/line_p/data/observation"
-    
-    data_dir = Path(data_dir)
+    output_dir=Path("/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output")
+    data_dir=Path("/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/data")
+    work_dir=Path("/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output/work")
     
     # === Prepare Data ===
     train_data, val_data, test_data, stations, depths = prepare_data(
