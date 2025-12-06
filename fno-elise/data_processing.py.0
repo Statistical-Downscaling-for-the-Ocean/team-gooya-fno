@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Adopted from https://github.com/Statistical-Downscaling-for-the-Ocean/graph-neural-net/blob/main by 
+Adopted from https://github.com/Statistical-Downscaling-for-the-Ocean/graph-neural-net/blob/main by
 @author: rlc001
 """
 
 
 import pandas as pd
 import numpy as np
-import glob
-import os
 import xarray as xr
+
 import json
 
-def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
+from pathlib import Path
+
+def load_ctd_data(ctd_data_file, start_year, end_year):
     """
     Load and process CTD csv files for a given year range.
     Returns an xarray.Dataset with dimensions (depth, station, time)).
     """
     
-    df_all = pd.read_csv(data_dir, comment="#")
+    df_all = pd.read_csv(ctd_data_file, comment="#")
 
     df_all["TIME"] = pd.to_datetime(df_all["TIME"], format="%Y-%m-%d %H:%M:%S")
     df_all = df_all.rename(
@@ -66,7 +67,7 @@ def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
             for var in variables:
                 valid = (depth_idx >= 0) & (depth_idx < len(depths))
                 data_dict[var][t_idx, s_idx, depth_idx[valid]] = df_s[var].values[valid]
-    
+
     # Return as xarray dataset
     ds = xr.Dataset(
         {
@@ -74,10 +75,10 @@ def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
         },
         coords={
             "time": times,
-            "station": ('station',stations),
-            "lat" : ('station', latitudes),
-            "lon" : ('station',longitudes),
-            "distance" : ('station',distances),
+            "station": stations,
+            "lat" : latitudes,
+            "lon" : longitudes,
+            "distance" : distances,
             "depth": depths
         },
     )
@@ -90,32 +91,11 @@ def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
     ds["Oxygen"].attrs["units"] = "umol/kg"
     ds["Longitude"].attrs["units"] = "deg"
     ds["Latitude"].attrs["units"] = "deg"
-    if groupby_daily:
-        ds = ds.groupby(ds.time.dt.floor("D")).mean().rename({'floor' : 'time'})
-    return ds.transpose('time', 'depth', 'station').sel(station=slice(None, None, -1))
 
-def load_model_data(data_dir, start_year, end_year):
-    if 'NEP36_CanOE' in data_dir:
-        ds = xr.open_dataset(data_dir)
-        # ds = ds.sortby('lat')
-        ds = ds.sortby('lon')
-        latitudes = ds.lat.values
-        longitudes = ds.lon.values
-        distances = np.array([0 if ind == 0 else haversine(latitudes[ind], longitudes[ind], latitudes[ind - 1], longitudes[ind - 1]) for ind, s in enumerate(longitudes)])
-        ds = ds.assign_coords(distances = ('point', distances))         
+    return ds
 
-        ds = ds.rename({
-            "point": "station",
-            "salt": "Salinity",
-            "temp": "Temperature"})
-        bathymetry =  ds['DIC'][0].where(ds['DIC'][0] == 0,1).drop(['time'])
-        ds = ds.where(bathymetry == 1)
-        
-    start_date = pd.Timestamp(f"{start_year}-01-01")
-    end_date = pd.Timestamp(f"{end_year+1}-01-01")
-    
-    ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True)
-    return ds.transpose('time','depth','station'), bathymetry
+
+
 def normalize_dataset(ds, var_methods=None):
     """
     Normalize selected variables in an xarray.Dataset for ML.
@@ -136,7 +116,6 @@ def normalize_dataset(ds, var_methods=None):
         "Depth": "minmax",
         "Latitude": None,
         "Longitude": None,
-        "DOY" : None
     }
 
     if var_methods is None:
@@ -194,7 +173,7 @@ def apply_normalization(ds, scale_params):
     return ds_norm
 
 def make_synthetic_linep(time, stations, depths) -> xr.Dataset:
-   
+
     T = len(time)
     D = len(depths)
     S = len(stations)
@@ -206,10 +185,10 @@ def make_synthetic_linep(time, stations, depths) -> xr.Dataset:
         for si in range(S):
             for di, depth in enumerate(depths):
                 val = seasonal
-                val += 0.2 * si                         
-                val += np.exp(-depth / 200.0)          
+                val += 0.2 * si
+                val += np.exp(-depth / 200.0)
                 val += 0.3 * np.sin(0.1 * si * ti / max(1, S))
-                val += 0.5 * rng.normal()             
+                val += 0.5 * rng.normal()
                 data[ti, si, di] = val + 10
 
     ds = xr.Dataset({"Temperature": (("time", "station", "depth"), data)}, coords={"time": time, "station": stations, "depth": depths})
@@ -226,92 +205,76 @@ def reshape_to_tcsd(ds_input: xr.DataArray, ds_target: xr.DataArray):    ##NEW
 #%%
 
 def prepare_data(
-    work_dir: str,
-    data_dir: str,   ##Changed
-    model_dir: str,
+    work_dir: Path,
+    data_dir: Path,   ##Changed
     year_range: tuple[int, int],
-    groupby_daily = True,
     stations: list[str] | None = None,
-    # depths: list[float] | None = None,  ##Changed
+    depths = [0.5, 10.5, 50.5, 100.5],     ##Changed
     target_variable: str = "Temperature",
-    # bathymetry_in : xr.DataArray | None = None,  ##Changed
+    bathymetry_in : xr.DataArray | None = None,  ##Changed
     train_ratio = 0.7,  ##Changed
     val_ratio = 0.15   ##Changed
 
 ):
-    
+
     #work_dir = "/home/rlc001/data/ppp5/analysis/stat_downscaling-workshop"
     #year_range = (1999, 2000)
     #variable = "Temperature"
     #stations = ["P22", "P23", "P24", "P25", "P26"]
     #depths = [0.5, 10.5, 50.5, 100.5]
-    
+
+    ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
     start_year, end_year = year_range
-    obs = load_ctd_data(data_dir, start_year, end_year, groupby_daily=groupby_daily)
-    
+    ds = load_ctd_data(ctd_filename, start_year, end_year)
+
     # Subset stations and depths
     #print(ds.station.values)
-    if stations is not None: 
-        obs = obs.sel(station=stations)
+    if stations is not None:
+        station_numbers = [s.lstrip("P") for s in stations]
+        print(station_numbers)
+        print(ds.station)
+        ds = ds.sel(station=stations)
 
     #### For now to test but to be removed later ####
     print('==========================================================\n'+
         'Warning! In this protocode only 4 depth points are selcted! Edit for the actual training! \n' + 
         '==========================================================\n')
     depths = [0.5, 25.5, 50.5, 75.5]     ##Changed
-    obs = obs.sel(depth=depths)   ##Changed
+    ds = ds.sel(depth=depths)   ##Changed
     #################################################
 
-    
-    obs = obs[[target_variable]]
-    stations = obs['station']
-    depths = obs['depth']
-    obs = obs.expand_dims('channels', axis = -3)
-    
+    ds_target = ds[[target_variable]]
+    stations = ds_target['station']
+    depths = ds_target['depth']
+    ds_target = ds_target.expand_dims('channels', axis = -3)
+
     # Generate synthetic line p temperature 'model' data
     # Replace this by loading model data
-    # ds_input = make_synthetic_linep(ds_target['time'], ds_target['station'], ds_target['depth'])
-    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year)
-    ds_input = ds_input[[target_variable]].sel(time = obs.time, method = 'nearest')
-    ds_input = ds_input.expand_dims('channels', axis = -3).interp(depth = obs.depth, extrapolate = True)
-    print('==========================================================\n'+
-              'model data interpolation in depth has to be edited! \n' + 
-        '==========================================================\n')     
-    
-    ds_target = xr.full_like(ds_input[[target_variable]], np.NaN)
-    model_ind_closet_to_obs = [np.argmin([haversine(ds_target.lat[i].values, ds_target.lon[i].values, obs.lat[j].values, obs.lon[j].values) 
-                                          for i in range(len(ds_target.station))])  for j in  range(len(obs.station))]
-    
-    for trgt in [target_variable]:
-        arr = ds_target[trgt].values.copy() 
-        arr[...,model_ind_closet_to_obs] = obs[trgt].values
-        ds_target[trgt] = (ds_target[trgt].dims, arr)
-
+    ds_input = make_synthetic_linep(ds_target['time'], ds_target['station'], ds_target['depth'])
+    ds_input = ds_input.expand_dims('channels', axis = -3)
     # Add static variables
-    if bathymetry is not None:
-        bathymetry = bathymetry.interp(depth = ds_input.depth)
-        bathymetry = bathymetry.where(bathymetry == 0 , 1)
-        ds_input = ds_input.where(bathymetry == 1, 0)
-        print('==========================================================\n'+
-              'bathymetry interpolation has to be edited checked! \n' + 
-              '==========================================================\n')        
-        ds_input['bathymetry'] = bathymetry.broadcast_like(ds_input[target_variable])
+    if bathymetry_in is None:    ##Changed
+        bathymetry_in = (~np.isnan(ds_input)).astype(int).rename({target_variable : 'Bathymetry'})   ##Changed
 
-    doy = xr.DataArray(
-    (obs.time.values.astype('datetime64[D]') - obs.time.values.astype('datetime64[Y]')).astype(int) + 1,
-    dims=("time",),
-    coords={"time": ds_input.time},
-    name="DOY"
+    # ds_input = ds_input.fillna(0)
+    ds_input["Bathymetry"] = bathymetry_in["Bathymetry"]
+    # ds_input = xr.concat([ds_input[target_variable], bathymetry_in['Bathymetry']], dim = 'channels')
+
+    depth_in = xr.DataArray(
+    ds_target.depth.values,
+    dims=("depth",),
+    coords={"depth": ds_input.depth},
+    name="Depth"
     )
-    ds_input["DOY"] = np.sin(doy/365).broadcast_like(ds_input[target_variable])
-    
+    ds_input["Depth"] = depth_in.broadcast_like(ds_input[target_variable])
+
     # === Split Data into train, validation, test ===
     T = ds_input.sizes["time"]
     # split ratios
     # split indices
     train_end = int(train_ratio * T)
     val_end = int((train_ratio + val_ratio) * T)
-    
+
     ds_input_train = ds_input.isel(time=slice(0, train_end))
     ds_input_val   = ds_input.isel(time=slice(train_end, val_end))
 
@@ -334,16 +297,16 @@ def prepare_data(
     # Save input normalization parameters
     with open(f"{work_dir}/scale_params_in.json", "w") as f:
         json.dump(scale_params_in, f, indent=2)
-    
+
     # Apply same normalization to validation & test inputs
     ds_input_val_norm  = apply_normalization(ds_input_val, scale_params_in)
     ds_input_test_norm = apply_normalization(ds_input_test, scale_params_in)
-    
+
     ds_target_train_norm, scale_params_target = normalize_dataset(ds_target_train)
     # Save target normalization parameters
     with open(f"{work_dir}/scale_params_target.json", "w") as f:
         json.dump(scale_params_target, f, indent=2)
-    
+
     # Apply same normalization to validation & test targets
     ds_target_val_norm  = apply_normalization(ds_target_val, scale_params_target)
     ds_target_test_norm = apply_normalization(ds_target_test, scale_params_target)
@@ -352,7 +315,7 @@ def prepare_data(
     print("\nPrepare Training:")
     train_data = reshape_to_tcsd(ds_input_train_norm, ds_target_train_norm)  ##Changed
     print("Done")
-    print("\nPrepare Validation:")  
+    print("\nPrepare Validation:")
     val_data = reshape_to_tcsd(ds_input_val_norm, ds_target_val_norm)   ##Changed
     print("Done")
     print("\nPrepare Testing:")
