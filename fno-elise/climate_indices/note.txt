@@ -1,0 +1,1 @@
+The indices most likely to be useful may be derived from products including line P SST data (PDO, NPGO, both calculated from SST reconstructions). I believe the other products should be independent as they are atmospheric or tropical.
