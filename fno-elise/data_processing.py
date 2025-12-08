@@ -12,14 +12,15 @@ import glob
 import os
 import xarray as xr
 import json
+from pathlib import Path
 
-def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
+def load_ctd_data(ctd_data_file, start_year, end_year, groupby_daily = False):
     """
     Load and process CTD csv files for a given year range.
     Returns an xarray.Dataset with dimensions (depth, station, time)).
     """
     
-    df_all = pd.read_csv(data_dir, comment="#")
+    df_all = pd.read_csv(ctd_data_file, comment="#")
 
     df_all["TIME"] = pd.to_datetime(df_all["TIME"], format="%Y-%m-%d %H:%M:%S")
     df_all = df_all.rename(
@@ -66,7 +67,7 @@ def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False):
             for var in variables:
                 valid = (depth_idx >= 0) & (depth_idx < len(depths))
                 data_dict[var][t_idx, s_idx, depth_idx[valid]] = df_s[var].values[valid]
-    
+
     # Return as xarray dataset
     ds = xr.Dataset(
         {
@@ -194,7 +195,7 @@ def apply_normalization(ds, scale_params):
     return ds_norm
 
 def make_synthetic_linep(time, stations, depths) -> xr.Dataset:
-   
+
     T = len(time)
     D = len(depths)
     S = len(stations)
@@ -206,10 +207,10 @@ def make_synthetic_linep(time, stations, depths) -> xr.Dataset:
         for si in range(S):
             for di, depth in enumerate(depths):
                 val = seasonal
-                val += 0.2 * si                         
-                val += np.exp(-depth / 200.0)          
+                val += 0.2 * si
+                val += np.exp(-depth / 200.0)
                 val += 0.3 * np.sin(0.1 * si * ti / max(1, S))
-                val += 0.5 * rng.normal()             
+                val += 0.5 * rng.normal()
                 data[ti, si, di] = val + 10
 
     ds = xr.Dataset({"Temperature": (("time", "station", "depth"), data)}, coords={"time": time, "station": stations, "depth": depths})
@@ -226,9 +227,9 @@ def reshape_to_tcsd(ds_input: xr.DataArray, ds_target: xr.DataArray):    ##NEW
 #%%
 
 def prepare_data(
-    work_dir: str,
-    data_dir: str,   ##Changed
-    model_dir: str,
+    work_dir: Path,
+    data_dir: Path,   ##Changed
+    model_dir: Path,
     year_range: tuple[int, int],
     groupby_daily = True,
     stations: list[str] | None = None,
@@ -239,17 +240,18 @@ def prepare_data(
     val_ratio = 0.15   ##Changed
 
 ):
-    
+
     #work_dir = "/home/rlc001/data/ppp5/analysis/stat_downscaling-workshop"
     #year_range = (1999, 2000)
     #variable = "Temperature"
     #stations = ["P22", "P23", "P24", "P25", "P26"]
     #depths = [0.5, 10.5, 50.5, 100.5]
-    
+
+    ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
     start_year, end_year = year_range
-    obs = load_ctd_data(data_dir, start_year, end_year, groupby_daily=groupby_daily)
+    obs = load_ctd_data(ctd_filename, start_year, end_year, groupby_daily=groupby_daily)
     
-    # Subset stations and depths
+# Subset stations and depths
     #print(ds.station.values)
     if stations is not None: 
         obs = obs.sel(station=stations)
@@ -303,7 +305,7 @@ def prepare_data(
     coords={"time": ds_input.time},
     name="DOY"
     )
-    ds_input["DOY"] = np.sin(doy/365).broadcast_like(ds_input[target_variable])
+    ds_input["DOY"] = np.sin(2*np.pi*doy/365).broadcast_like(ds_input[target_variable])
     
     # === Split Data into train, validation, test ===
     T = ds_input.sizes["time"]
