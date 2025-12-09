@@ -1,3 +1,18 @@
+# EO update 12/9/2025:
+This version of the code loads ROMS model data and processes the variable t_pot, which is potential temperature. 
+It loads the model data from griddedROMS.nc and trains from a subset of this model data to the full resolution output. 
+The gridded observations are loaded only for the purpose of creating a mask to select the subset of model data that is used as input, so that the sampling frequency in the training data is similar to the observations. 
+The file containing gridded observations is ctd_obs_ds_v2.nc.
+Currently, the functionality that restricts the obs and model datasets to a subset of years is disabled as it was causing an error that I ran out of time to try to fix.
+The notebooks that were used to create ctd_obs_ds_v2.nc require an additional library: gsw. I couldn't find a way around it to convert from in situ to potential temperature. The notebooks are:
+ - pseudoCruiseIDs_Explore.ipynb
+ - pseudoCruiseIDs_ObsCTDdataProc.ipynb
+The notebook used to create griddedROMS.nc is:
+ - loadROMS.ipynb
+The grid I used is created with selectGrid.ipynb and saved in gridspecs.csv, which contains grid id (index) and nom_lat and nom_lon (center lat/lon) as well as the line P Station numbers that map to each grid (if any exist). 
+
+
+
 # FNO
 This repository contains the code related to an FNO approach to filling in Line-P data..
 
