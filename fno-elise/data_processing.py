@@ -247,27 +247,28 @@ def prepare_data(
     #stations = ["P22", "P23", "P24", "P25", "P26"]
     #depths = [0.5, 10.5, 50.5, 100.5]
 
-    ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
-    start_year, end_year = year_range
-    obs = load_ctd_data(ctd_filename, start_year, end_year, groupby_daily=groupby_daily)
+    ## replace with saved ds
+    ## ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
+    ## start_year, end_year = year_range
+    ## obs = load_ctd_data(ctd_filename, start_year, end_year, groupby_daily=groupby_daily)
+    obs=xr.open_dataset('/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output/ctdObs/ctd_obs_ds.nc')
     
-# Subset stations and depths
-    #print(ds.station.values)
-    if stations is not None: 
-        obs = obs.sel(station=stations)
+# # Subset stations and depths
+#     #print(ds.station.values)
+#     if stations is not None: 
+#         obs = obs.sel(station=stations)
 
-    #### For now to test but to be removed later ####
-    print('==========================================================\n'+
-        'Warning! In this protocode only 4 depth points are selcted! Edit for the actual training! \n' + 
-        '==========================================================\n')
-    depths = [0.5, 25.5, 50.5, 75.5]     ##Changed
-    obs = obs.sel(depth=depths)   ##Changed
-    #################################################
+    # #### For now to test but to be removed later ####
+    # print('==========================================================\n'+
+    #     'Warning! In this protocode only 4 depth points are selcted! Edit for the actual training! \n' + 
+    #     '==========================================================\n')
+    # depths = [0.5, 25.5, 50.5, 75.5]     ##Changed
+    # obs = obs.sel(depth=depths)   ##Changed
+    # #################################################
 
-    
     obs = obs[[target_variable]]
-    stations = obs['station']
-    depths = obs['depth']
+    stations = obs['x']
+    depths = obs['z']
     obs = obs.expand_dims('channels', axis = -3)
     
     # Generate synthetic line p temperature 'model' data
