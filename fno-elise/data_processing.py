@@ -140,7 +140,7 @@ def prepare_data(
     obsmask=~np.isnan(obs[target_variable])
     stations = obs['x']
     depths = obs['z']
-    obs = obs.expand_dims('channels', axis = -3)
+    #obs = obs.expand_dims('channels', axis = -3)
     
     # load model data
     ds_input0, bathymetry = load_model_data(Path(data_dir,Path('griddedROMS.nc')), start_year, end_year)
@@ -167,7 +167,9 @@ def prepare_data(
     ds_input['cos_yd']=ds_input0['cos_yearday'].broadcast_like(ds_input[target_variable])
     
     ds_input = ds_input.expand_dims('channels', axis = -3)
+    ds_target= ds_target.expand_dims('channels', axis = -3)
     print('\nds_input\n',ds_input)
+    print('\nds_target\n',ds_target)
 
     # === Split Data into train, validation, test ===
     T = ds_input.sizes["time"]

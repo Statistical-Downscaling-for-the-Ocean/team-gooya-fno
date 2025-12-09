@@ -132,6 +132,8 @@ def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, 
 
     train_dataset = make_snapshot_data(input_train, target_train, mask)  ##Changed
     val_dataset = make_snapshot_data(val_input_train, target_val, val_mask)  ##Changed
+    print(f'x: {train_dataset.input.shape}')
+    print(f'y: {train_dataset.target.shape}')
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
