@@ -64,12 +64,15 @@ def evaluate_snapshot(model, loader, loss_function): ##Changed
     mse = batch_mse / len(loader)
     return mse
 
-def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5, epochs=200, reduction = 'mean_snap', save_path=None):
+def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5, epochs=200, reduction = 'mean_snap',early_stoppng_buffer = None, save_path=None):
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
     best_val_mse = np.inf
     best_state = None
     MSE_loss = WeightedMSE(reduction = reduction)  ##NEW
+    train_losses = []
+    val_losses = []
+    earlystopping_counter = 0
 
     for ep in range(1, epochs + 1):
         model.train()
@@ -84,29 +87,38 @@ def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5,
             out = model(x)
             if mask.sum() == 0:
                 continue
-            loss = MSE_loss(out, y, mask, print_loss = True)  ##NEW
+            loss = MSE_loss(out, y, mask, print_loss = False)  ##NEW
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
         # validation
+        train_losses.append(total_loss)
         if val_loader is not None:
             val_mse = evaluate_snapshot(model, val_loader, MSE_loss)  ##Changed
+            val_losses.append(val_mse)
             if val_mse < best_val_mse:
                 best_val_mse = val_mse
                 best_state = model.state_dict()
                 if save_path is not None:
                     torch.save(best_state, save_path)
                     print(f"Saved best model (val_mse={best_val_mse:.4f})")
-                
+            elif early_stoppng_buffer is not None:
+                earlystopping_counter += 1
+                if (earlystopping_counter >= early_stoppng_buffer) and (ep >= 15 ):  # want to train for at least 20 epochs
+                    print(
+                        f"Stopping early --> epoch valodation score {val_mse} has not decreased over {early_stoppng_buffer} epochs compared to best {best_val_mse} ")
+                    break
+        
+        
         if ep % 10 == 0 or ep == 1:
             print(f"Epoch {ep:03d} | TrainLoss={total_loss:.4f} | ValMSE={val_mse if val_loader else 'N/A'}")
 
     if best_state is not None:
         model.load_state_dict(best_state)
-    return model
+    return model, train_losses, val_losses, best_val_mse
 
 
-def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, modes2 = None, batch_size = 2, n_epochs=200, lr=1e-3, wd=1e-5, reduction = 'mean_snap',save_path=None):  ##Changed
+def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, modes2 = None, batch_size = 2, n_epochs=200, lr=1e-3, wd=1e-5, reduction = 'mean_snap', early_stoppng_buffer = None,save_path=None):  ##Changed
     input_train, target_train, mask = data_train
     val_input_train, target_val, val_mask  = data_val
 
@@ -125,6 +137,6 @@ def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, 
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model =  FNO2d(C, width , modes1, modes2, num_layers  =num_layers)  ##New
-    model = train_snapshot_model(model, train_loader, val_loader, epochs=n_epochs, lr = lr, wd = wd,  reduction = reduction, save_path=save_path)   ##Changed
+    model, train_losses, val_losses, best_val_mse = train_snapshot_model(model, train_loader, val_loader, epochs=n_epochs, lr = lr, wd = wd,  reduction = reduction,early_stoppng_buffer = early_stoppng_buffer, save_path=save_path)   ##Changed
     
-    return model
+    return model, train_losses, val_losses, best_val_mse

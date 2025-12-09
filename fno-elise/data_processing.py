@@ -15,16 +15,16 @@ from pathlib import Path
 
 def load_ctd_data(fpath,start_year, end_year):
     ds=xr.open_dataset(fpath)
-    start_date = pd.Timestamp(f"{start_year}-01-01")
-    end_date = pd.Timestamp(f"{end_year+1}-01-01")
-    ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True)
+    #start_date = pd.Timestamp(f"{start_year}-01-01")
+    #end_date = pd.Timestamp(f"{end_year+1}-01-01")
+    #ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True)
     return ds
     
 def load_model_data(fpath, start_year, end_year):
     ds=xr.open_dataset(fpath)
-    start_date = pd.Timestamp(f"{start_year}-01-01")
-    end_date = pd.Timestamp(f"{end_year+1}-01-01")
-    ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True)
+    #start_date = pd.Timestamp(f"{start_year}-01-01")
+    #end_date = pd.Timestamp(f"{end_year+1}-01-01")
+    #ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True) #
     return ds, ds['bathy'].values
 
 def normalize_dataset(ds, var_methods=None):
@@ -117,9 +117,7 @@ def reshape_to_tcsd(ds_input: xr.DataArray, ds_target: xr.DataArray):    ##NEW
 def prepare_data(
     work_dir: Path,
     data_dir: Path,   ##Changed
-    model_dir: Path,
     year_range: tuple[int, int],
-    stations: list[str] | None = None,
     # depths: list[float] | None = None,  ##Changed
     target_variable: str = "t_pot",
     # bathymetry_in : xr.DataArray | None = None,  ##Changed
@@ -128,8 +126,6 @@ def prepare_data(
 
 ):
     
-    work_dir='/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output/work'
-    model_dir='/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output'
     #work_dir = "/home/rlc001/data/ppp5/analysis/stat_downscaling-workshop"
     #year_range = (1999, 2000)
     #variable = "Temperature"
@@ -138,8 +134,8 @@ def prepare_data(
 
     ## replace with saved ds
     ## ctd_filename = data_dir / "lineP_ctds/lineP_CTD_training.csv"
-    ## start_year, end_year = year_range
-    obs = load_ctd_data('/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output/ctdObs/ctd_obs_ds.nc', start_year, end_year)
+    start_year, end_year = year_range
+    obs = load_ctd_data(Path(data_dir,Path('ctd_obs_ds_v2.nc')), start_year, end_year)
     obs=obs[[target_variable]]
     obsmask=~np.isnan(obs[target_variable])
     stations = obs['x']
@@ -147,17 +143,16 @@ def prepare_data(
     obs = obs.expand_dims('channels', axis = -3)
     
     # load model data
-    ds_input0, bathymetry = load_model_data('/space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output/griddedROMS.nc', start_year, end_year)
+    ds_input0, bathymetry = load_model_data(Path(data_dir,Path('griddedROMS.nc')), start_year, end_year)
     ds_input=ds_input0[[target_variable]]
     ds_target=ds_input.copy()
     
     # apply mask based on permutations of obs sampling pattern
     perm=np.random.permutation(len(obs.time))
     perm=np.concatenate((perm,perm),axis=0)
-    omask=obsmask.isel(t_ind=perm[:len(ds_input.time)]).values
+    omask=obsmask.isel(time=perm[:len(ds_input.time)]).values
     ds_input=ds_input*omask
     
-    ds_input = ds_input.expand_dims('channels', axis = -3)
     
     # for trgt in [target_variable]:
     #     arr = ds_target[trgt].values.copy() 
@@ -166,11 +161,14 @@ def prepare_data(
 
     # Add static variables
     if bathymetry is not None:  
-        ds_input['bathymetry'] = bathymetry
-    ds_input['omask']=omask
-    ds_input['sin_yd']=ds_input0['sin_yd'].broadcast_like(ds_input[target_variable])
-    ds_input['cos_yd']=ds_input0['cos_yd'].broadcast_like(ds_input[target_variable])
+        ds_input['bathymetry'] = (["time","z","x"],np.broadcast_to(bathymetry,ds_input[target_variable].values.shape))
+    ds_input['omask']=(["time","z","x"],omask)
+    ds_input['sin_yd']=ds_input0['sin_yearday'].broadcast_like(ds_input[target_variable])
+    ds_input['cos_yd']=ds_input0['cos_yearday'].broadcast_like(ds_input[target_variable])
     
+    ds_input = ds_input.expand_dims('channels', axis = -3)
+    print('\nds_input\n',ds_input)
+
     # === Split Data into train, validation, test ===
     T = ds_input.sizes["time"]
     # split ratios
@@ -213,6 +211,9 @@ def prepare_data(
     # Apply same normalization to validation & test targets
     ds_target_val_norm  = apply_normalization(ds_target_val, scale_params_target)
     ds_target_test_norm = apply_normalization(ds_target_test, scale_params_target)
+
+    print('ds_target_val_norm:\n',ds_target_val_norm)
+    print('ds_target_test_norm:\n',ds_target_test_norm)
 
     # reshape data into graph structure, and compute target value mask
     print("\nPrepare Training:")

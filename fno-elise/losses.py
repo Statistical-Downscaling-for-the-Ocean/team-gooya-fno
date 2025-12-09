@@ -24,7 +24,7 @@ class WeightedMSE:  ##NEW
             weight = torch.ones_like(y) * self.weights.to(data)
 
         if self.reduction.lower() == 'mean_snap':
-            mask_time = torch.tensor(weight.clone().sum((-1,-2)), dtype = bool)
+            mask_time = torch.tensor(weight.clone().requires_grad_(False).sum((-1,-2)), dtype = bool)
             SE = ((y_hat - y)**2 * weight).sum((-1,-2))
             loss = ( SE[mask_time]/ weight.sum((-1,-2))[mask_time]).mean()
         elif self.reduction.lower() == 'mean':
