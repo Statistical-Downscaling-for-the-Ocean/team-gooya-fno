@@ -1,2 +1,5 @@
 .ipynb_checkpoints
 data_processing_0.py
+
+__pycache__/
+fno_Parsa/__pycache__/

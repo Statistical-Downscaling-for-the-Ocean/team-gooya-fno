@@ -6,12 +6,16 @@ The file containing gridded observations is ctd_obs_ds_v2.nc.
 Currently, the functionality that restricts the obs and model datasets to a subset of years is disabled as it was causing an error that I ran out of time to try to fix.
 The notebooks that were used to create ctd_obs_ds_v2.nc require an additional library: gsw. I couldn't find a way around it to convert from in situ to potential temperature. The notebooks are:
  - pseudoCruiseIDs_Explore.ipynb
- - pseudoCruiseIDs_ObsCTDdataProc.ipynb
+ - pseudoCruiseIDs_ObsCTDdataProc-Copy1.ipynb
 The notebook used to create griddedROMS.nc is:
  - loadROMS.ipynb
 The grid I used is created with selectGrid.ipynb and saved in gridspecs.csv, which contains grid id (index) and nom_lat and nom_lon (center lat/lon) as well as the line P Station numbers that map to each grid (if any exist). 
 
-
+To run with default settings:
+- download ctd_obs_ds_v2.nc to a new directory (datadir)
+- activate your python environment
+- python main.py --output_directory path_to_directory_where_you_want_to_save_output --data_directory datadir 
+eg, for me: python main.py --output_directory /space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/output --data_directory /space/hall5/sitestore/eccc/crd/ccrn/users/reo000/StatDownOc/griddedFiles
 
 # FNO
 This repository contains the code related to an FNO approach to filling in Line-P data..

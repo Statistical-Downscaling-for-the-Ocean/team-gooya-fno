@@ -146,7 +146,7 @@ def prepare_data(
     ds_input0, bathymetry = load_model_data(Path(data_dir,Path('griddedROMS.nc')), start_year, end_year)
     ds_input=ds_input0[[target_variable]]
     ds_target=ds_input.copy()
-    
+    ds_target[target_variable]=np.where(ds_input0['bathy'].broadcast_like(ds_input[target_variable])) 
     # apply mask based on permutations of obs sampling pattern
     perm=np.random.permutation(len(obs.time))
     perm=np.concatenate((perm,perm),axis=0)
@@ -165,7 +165,8 @@ def prepare_data(
     ds_input['omask']=(["time","z","x"],omask)
     ds_input['sin_yd']=ds_input0['sin_yearday'].broadcast_like(ds_input[target_variable])
     ds_input['cos_yd']=ds_input0['cos_yearday'].broadcast_like(ds_input[target_variable])
-    
+    ds_target[target_variable]=ds_input[target_variable].where(ds_input0['bathy'],ds_input[target_variable],np.nan)
+
     ds_input = ds_input.expand_dims('channels', axis = -3)
     ds_target= ds_target.expand_dims('channels', axis = -3)
     print('\nds_input\n',ds_input)

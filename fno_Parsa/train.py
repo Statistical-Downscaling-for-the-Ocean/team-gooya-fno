@@ -124,13 +124,13 @@ def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, 
     val_input_train, target_val, val_mask  = data_val
 
     _, O, _, _ = target_train.shape 
-    T, C, S, D = input_train.shape  
+    T, C, D, S = input_train.shape  
     if modes1 is None: ##NEW
-        modes1  = S  
+        modes1  = D  
     if modes2 is None:  ##NEW
-        modes2 = np.floor(D/2) + 1 
+        modes2 = np.floor(S/2) + 1 
     else:
-        assert modes2 <= np.floor(D/2) + 1 
+        assert modes2 <= np.floor(S/2) + 1 
 
     train_dataset = make_snapshot_data(input_train, target_train, mask)  ##Changed
     val_dataset = make_snapshot_data(val_input_train, target_val, val_mask)  ##Changed

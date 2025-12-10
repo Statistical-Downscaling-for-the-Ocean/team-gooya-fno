@@ -127,8 +127,8 @@ def evaluate_model(model, test_loader, target_variable=["Temperature"], stations
         if depths is not None:
             if type(depths) == xr.DataArray:
                 depths = depths.values
-            plt.x(range(num_depths), depths)
-            plt.x('depth')
+            plt.yticks(range(num_depths), depths)
+            plt.ylabel('depth')
         if stations is not None:
             if type(stations) == xr.DataArray:
                 stations = stations.values

@@ -336,7 +336,8 @@ def prepare_data(
     #### NEP36_CanOE has a fine horizontal resolution to which obs has to be rewritten, and depth has to be interpolated to obs ###    
     if 'NEP36_CanOE' in str(model_dir):
         ds_input = ds_input.interp(depth = obs.depth, kwargs={"fill_value": "extrapolate"})
-        obs = obs.where(obs.lon >= ds_input.lon.min(), drop = True)
+        ds_input = ds_input.where(ds_input.lon > obs.sel(stattion = 'P23').lon, drop = True)
+        obs = obs.where(obs.lon > obs.sel(stattion = 'P23').lon, drop = True)
         mask_time = obs.where(~np.isnan(obs), 0 ).sum(['depth','station'])
         obs = obs.where(mask_time != 0, drop = True)
         mask_time['time'] = ds_input['time']
@@ -428,7 +429,7 @@ def prepare_data(
 
     # reshape data into graph structure, and compute target value mask
     print("\nPrepare Training:")
-    train_data = reshape_to_tcsd(ds_input_train_norm, ds_target_train_norm)  ##Changed
+    train_data = reshape_to_tcsd(ds_input_train_norm, ds_target_train_norm)  ##ds_input_train_norm and ds_target_train_norm should have nans where data are missing
     print("Done")
     print("\nPrepare Validation:")
     val_data = reshape_to_tcsd(ds_input_val_norm, ds_target_val_norm)   ##Changed

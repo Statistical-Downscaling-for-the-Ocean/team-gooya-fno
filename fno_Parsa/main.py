@@ -36,12 +36,12 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
     
     # main_dir = "/path/to/my/projects/line_p/"
     # data_dir = "/path/to/my/projects/line_p/data/observation"
-
+    model_name = str(model_directory).split('/')[-1]
     now = datetime.now()
     formatted = now.strftime("%Y-%m-%d-%H:%M")
 
     print(f'Started run with id : {formatted}')
-    work_directory = output_directory / f'{formatted}'
+    work_directory = output_directory / f'{formatted}-{model_name}'
     Path(work_directory).mkdir(parents=True, exist_ok=True)
     
     input_variable = ["Temperature"]
