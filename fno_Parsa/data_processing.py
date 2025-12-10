@@ -288,6 +288,7 @@ def prepare_data(
     groupby_daily = True,
     stations: list[str] | None = None,
     # depths: list[float] | None = None,  ##Changed
+    input_variable: list = None, 
     target_variable: list = ["Temperature"],
     # bathymetry_in : xr.DataArray | None = None,  ##Changed
     train_ratio = 0.7,  ##Changed
@@ -297,7 +298,8 @@ def prepare_data(
 
     start_year, end_year = year_range
     obs = load_ctd_data(data_dir, start_year, end_year, groupby_daily=groupby_daily)
-    
+    if input_variable is None:
+        input_variable = target_variable
     # Subset stations and depths
     #print(ds.station.values)
     if stations is not None: 
@@ -329,7 +331,7 @@ def prepare_data(
     print(f'\n Training for {min_time.values} = {max_time.values} \n')
     obs = obs.where((obs.time >= min_time)  &  (obs.time <= max_time), drop = True)   
     ds_input = ds_input.where((ds_input.time >= min_time)  &  (ds_input.time <= max_time), drop = True)   
-    ds_input = ds_input[target_variable].sel(time = obs.time, method = 'nearest').expand_dims('channels', axis = -3)
+    ds_input = ds_input[input_variable].sel(time = obs.time, method = 'nearest').expand_dims('channels', axis = -3)
 
     #### NEP36_CanOE has a fine horizontal resolution to which obs has to be rewritten, and depth has to be interpolated to obs ###    
     if 'NEP36_CanOE' in str(model_dir):
@@ -349,7 +351,8 @@ def prepare_data(
 
     #### rewriting obs to model grid ###  
     # ds_target = xr.full_like(ds_input[[target_variable]], np.NaN)
-    ds_target = xr.full_like(ds_input[target_variable], np.NaN)
+
+    ds_target = xr.combine_by_coords([xr.full_like(ds_input[input_variable[0]], np.NaN).to_dataset(name = trgt) for  trgt in target_variable])
     model_ind_closet_to_obs = [np.argmin([haversine(ds_target.lat[i].values, ds_target.lon[i].values, obs.lat[j].values, obs.lon[j].values) 
                                           for i in range(len(ds_target.station))])  for j in  range(len(obs.station))] ## extracting station locations on model grid
     
@@ -366,7 +369,7 @@ def prepare_data(
             bathymetry = bathymetry.where(bathymetry == 0 , 1)
             ds_input = ds_input.where(bathymetry == 1)
              
-        ds_input['bathymetry'] = bathymetry.broadcast_like(ds_input[target_variable])
+        ds_input['bathymetry'] = bathymetry.broadcast_like(ds_input[input_variable[0]])
 
     doy = xr.DataArray(
     (obs.time.values.astype('datetime64[D]') - obs.time.values.astype('datetime64[Y]')).astype(int) + 1,
@@ -374,10 +377,10 @@ def prepare_data(
     coords={"time": ds_input.time},
     name="DOY"
     )
-    ds_input["sin_DOY"] = np.sin(doy/365.25*np.pi/180).broadcast_like(ds_input[target_variable])
-    ds_input["cos_DOY"] = np.cos(doy/365.25*np.pi/180).broadcast_like(ds_input[target_variable])
+    ds_input["sin_DOY"] = np.sin(doy/365.25*np.pi/180).broadcast_like(ds_input[input_variable[0]])
+    ds_input["cos_DOY"] = np.cos(doy/365.25*np.pi/180).broadcast_like(ds_input[input_variable[0]])
 
-    
+
     stations = ds_target['station']
     depths = ds_target['depth']
     # === Split Data into train, validation, test ===

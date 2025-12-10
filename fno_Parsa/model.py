@@ -73,7 +73,7 @@ class FNOBlock(nn.Module):
             return F.gelu(x)
 
 class FNO2d(nn.Module):
-    def __init__(self, in_channels, width , modes1, modes2, num_layers  =1):
+    def __init__(self, in_channels, out_channels, width , modes1, modes2, num_layers  =1):
         super(FNO2d, self).__init__()
 
         """
@@ -100,7 +100,7 @@ class FNO2d(nn.Module):
             FNO_blocks.append(FNOBlock(width, self.modes1, self.modes2))
         self.FNO_blocks = nn.Sequential(*FNO_blocks)
 
-        self.last = MLP(width, 1, width * 4) # output channel is 1: u(x, y)
+        self.last = MLP(width, out_channels, width * 4) # output channel is 1: u(x, y)
 
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)

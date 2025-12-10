@@ -123,6 +123,7 @@ def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, 
     input_train, target_train, mask = data_train
     val_input_train, target_val, val_mask  = data_val
 
+    _, O, _, _ = target_train.shape 
     T, C, S, D = input_train.shape  
     if modes1 is None: ##NEW
         modes1  = S  
@@ -137,7 +138,7 @@ def train_model(data_train, data_val,width = 20, num_layers = 1, modes1 = None, 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model =  FNO2d(C, width , modes1, modes2, num_layers  =num_layers)  ##New
+    model =  FNO2d(C, O , width , modes1, modes2, num_layers  =num_layers)  ##New
     model, train_losses, val_losses, best_val_mse = train_snapshot_model(model, train_loader, val_loader, epochs=n_epochs, lr = lr, wd = wd,  reduction = reduction,early_stoppng_buffer = early_stoppng_buffer, save_path=save_path)   ##Changed
     
     return model, train_losses, val_losses, best_val_mse

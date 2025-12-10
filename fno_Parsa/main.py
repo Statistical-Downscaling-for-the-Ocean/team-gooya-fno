@@ -44,27 +44,32 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
     work_directory = output_directory / f'{formatted}'
     Path(work_directory).mkdir(parents=True, exist_ok=True)
     
+    input_variable = ["Temperature"]
+    target_variable = ["Temperature"]
+    year_range = (1990,2025)
     # data_dir = Path(data_dir)
     # === Prepare Data ===
     train_data, val_data, test_data, stations, depths = prepare_data(
         data_dir=data_directory,
         work_dir=work_directory,
         model_dir=model_directory,
-        year_range=(2000, 2005),
+        year_range=year_range,
         # stations=["P22", "P23", "P24", "P25", "P26"],
-        target_variable=["Temperature"],
+        input_variable = input_variable,
+        target_variable=target_variable,
         train_ratio=0.7, ##Changed
         val_ratio=0.15  ##Changed
     )
 
     # ======= model archotecture setup ==========
     width = 20
-    num_layers = 1
-    modes1 = None
-    modes2 = None
+    num_layers = 4
+    modes1 = 50
+    modes2 = 50
 
     with open(Path(work_directory, "training_parameters.txt"), 'w') as f:
         f.write(
+            f"year_range\t{year_range}\n" +
             f"width\t{width}\n" +
             f"num_layers\t{num_layers}\n" +
             f"modes1\t{modes1}\n"  + 
@@ -75,6 +80,8 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
             f"wd\t{wd}\n" +
             f"reduction\t{reduction}\n" +
             f"early_stoppng_buffer\t{early_stoppng_buffer}\n"  +
+            f"input_variable\t{input_variable}\n"  +
+            f"target_variable\t{target_variable}\n"  +
             f"data_dir\t{str(data_directory)}\n"  + 
             f"model_dir\t{str(model_directory)}\n"            
         )
@@ -111,7 +118,7 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
     _ = evaluate_model(
         model,
         test_loader,
-        target_variable="Temperature",
+        target_variable=target_variable,
         stations=stations,
         depths=depths,
         work_dir=work_directory
