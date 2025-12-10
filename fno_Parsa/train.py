@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import numpy as np
 from losses import WeightedMSE
 from model import FNO2d
+from torch.optim.lr_scheduler import  CosineAnnealingLR
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ########### If you have torch_geometric ##############
@@ -32,15 +33,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 class make_snapshot_data(Dataset):   ##Changed
-    def __init__(self,input_data, target_vals, mask):
+    def __init__(self,input_data, target_vals, mask = None):
         self.input = input_data
         self.target = target_vals
         self.mask = mask
     def __getitem__(self, index):
         x=torch.tensor(self.input[index], dtype=torch.float32)
         y=torch.tensor(self.target[index], dtype=torch.float32)
-        mask=torch.tensor(self.mask[index], dtype=torch.float32)
-        return x, y, mask
+        if self.mask is not None:
+            mask=torch.tensor(self.mask[index], dtype=torch.float32)
+            return x, y, mask
+        else:
+            return x, y
     def __len__(self):
         return len(self.input)
     
@@ -64,7 +68,7 @@ def evaluate_snapshot(model, loader, loss_function): ##Changed
     mse = batch_mse / len(loader)
     return mse
 
-def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5, epochs=200, reduction = 'mean_snap',early_stoppng_buffer = None, save_path=None):
+def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5, epochs=200, reduction = 'mean_snap',early_stoppng_buffer = None, save_path=None, min_lr = 0):
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
     best_val_mse = np.inf
@@ -73,6 +77,9 @@ def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5,
     train_losses = []
     val_losses = []
     earlystopping_counter = 0
+
+    scheduler = CosineAnnealingLR(optimizer, T_max=len(train_loader) * epochs, eta_min=min_lr)     
+                             
 
     for ep in range(1, epochs + 1):
         model.train()
@@ -91,6 +98,7 @@ def train_snapshot_model(model, train_loader, val_loader=None, lr=1e-3, wd=1e-5,
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            scheduler.step()
 
         # validation
         train_losses.append(total_loss/ len(train_loader))

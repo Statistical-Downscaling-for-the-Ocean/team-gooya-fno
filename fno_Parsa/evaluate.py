@@ -95,6 +95,17 @@ def evaluate_model(model, test_loader, target_variable=["Temperature"], stations
         print(f"Bias: {bias:.4f} {units[trgt]}")
         print("================================\n")
 
+        with open(Path(plot_dir, "results.txt"), 'w') as f:
+            f.write(
+                "\n=== Model Evaluation Metrics ===\n" + 
+                f"\n=== target variable {trgt} ===\n" + 
+                f"RMSE: {rmse:.4f} {units[trgt]}\n"  + 
+                f"MAE : {mae:.4f} {units[trgt]}\n"  + 
+                f"R²  : {r2:.4f}\n"  + 
+                f"Bias: {bias:.4f} {units[trgt]}\n"  + 
+                "================================\n"        
+            )
+
     # 1. Scatter
         plt.figure(figsize=(5, 5))
         plt.scatter(ys_true_valid, ys_pred_valid, s=10, alpha=0.6)
@@ -142,3 +153,36 @@ def evaluate_model(model, test_loader, target_variable=["Temperature"], stations
     np.savez(work_dir / "output.npz", ys_true_denorm.reshape(-1, 1,num_depths, num_stations), ys_pred_denorm.reshape(-1, 1,num_depths, num_stations))
 
     return ys_true_denorm.reshape(-1, 1, num_depths, num_stations), ys_pred_denorm.reshape(-1, 1, num_depths, num_stations)
+
+
+
+
+
+def model_inference(model, test_loader, target_variable=["Temperature"], stations=None, depths=None, work_dir=Path(".")):
+
+
+
+    num_stations = len(stations)
+    num_depths = len(depths)
+
+    model.eval()
+
+    ys_true_full = []
+    ys_pred_full = []
+
+    with torch.no_grad():
+        for x, ys in test_loader:  ##Changed
+            x = x.to(model.device if hasattr(model, "device") else "cuda" if torch.cuda.is_available() else "cpu")  ##Changed
+            out = model(x)  # [num_nodes]   ##Changed
+
+            ys_pred_full.append(out[0])
+
+    ys_pred_full = np.stack(ys_pred_full, axis=0)
+
+
+    with open(work_dir / "scale_params_target.json") as f:
+        scale_params_target = json.load(f)
+
+    ys_pred_denorm = np.concatenate([denormalize_variable(trgt, ys_pred_full[:,ind:ind+1], scale_params_target) for ind, trgt in enumerate(target_variable)], axis = 1)
+
+    return ys_pred_denorm

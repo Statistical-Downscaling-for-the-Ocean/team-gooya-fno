@@ -29,25 +29,28 @@ import numpy as np
 from pathlib import Path
 
 def main(output_directory, data_directory, model_directory, n_epochs, batch_size, lr , wd, reduction, early_stoppng_buffer ):
-
+    # ======= model architecture setup ==========
+    width = 20
+    num_layers = 5
+    modes1 = 5
+    modes2 = 5
+    # ======= data setup ==========
+    input_variable = ["Temperature"]
+    target_variable = ["Temperature"]
+    year_range = (1990,2025)
     # === Prepare Data ===
     # main_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/FNO"
     # data_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/data" 
-    
-    # main_dir = "/path/to/my/projects/line_p/"
-    # data_dir = "/path/to/my/projects/line_p/data/observation"
+
     model_name = str(model_directory).split('/')[-1]
+    target_name = "".join([trgt[0] for trgt in target_variable])
     now = datetime.now()
     formatted = now.strftime("%Y-%m-%d-%H:%M")
 
     print(f'Started run with id : {formatted}')
-    work_directory = output_directory / f'{formatted}-{model_name}'
+    work_directory = output_directory / f'{formatted}-{model_name}-modes-{modes1}-{modes2}-{target_name}'
     Path(work_directory).mkdir(parents=True, exist_ok=True)
     
-    input_variable = ["Temperature"]
-    target_variable = ["Temperature"]
-    year_range = (1990,2025)
-    # data_dir = Path(data_dir)
     # === Prepare Data ===
     train_data, val_data, test_data, stations, depths = prepare_data(
         data_dir=data_directory,
@@ -61,11 +64,7 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
         val_ratio=0.15  ##Changed
     )
 
-    # ======= model archotecture setup ==========
-    width = 20
-    num_layers = 4
-    modes1 = 50
-    modes2 = 50
+
 
     with open(Path(work_directory, "training_parameters.txt"), 'w') as f:
         f.write(

@@ -292,7 +292,8 @@ def prepare_data(
     target_variable: list = ["Temperature"],
     # bathymetry_in : xr.DataArray | None = None,  ##Changed
     train_ratio = 0.7,  ##Changed
-    val_ratio = 0.15   ##Changed
+    val_ratio = 0.15,   ##Changed
+
 
 ):
 
@@ -388,18 +389,33 @@ def prepare_data(
     T = ds_input.sizes["time"]
     # split ratios
     # split indices
-    train_end = int(train_ratio * T)
-    val_end = int((train_ratio + val_ratio) * T)
+    # train_end = int(train_ratio * T)
+    # val_end = int((train_ratio + val_ratio) * T)
+    # ds_input_train = ds_input.isel(time=slice(0, train_end))
+    # ds_input_val   = ds_input.isel(time=slice(train_end, val_end))
 
-    ds_input_train = ds_input.isel(time=slice(0, train_end))
-    ds_input_val   = ds_input.isel(time=slice(train_end, val_end))
+    # ds_target_train = ds_target.isel(time=slice(0, train_end))
+    # ds_target_val   = ds_target.isel(time=slice(train_end, val_end))
 
-    ds_target_train = ds_target.isel(time=slice(0, train_end))
-    ds_target_val   = ds_target.isel(time=slice(train_end, val_end))
+    idx_train = np.sort(np.random.choice(np.arange(T), size=int(train_ratio * T), replace=False))
+    mask = np.ones(np.arange(T).shape, dtype=bool)
+    mask[idx_train] = False
+    remaining = np.arange(T)[mask]
+ 
+    idx_val = np.sort(np.random.choice(remaining, size=int(val_ratio * T), replace=False))
 
     if train_ratio + val_ratio < 1:
-        ds_input_test  = ds_input.isel(time=slice(val_end, T))
-        ds_target_test  = ds_target.isel(time=slice(val_end, T))
+        idx_test = np.array([idx for idx in remaining if idx not in idx_val])
+
+    ds_input_train = ds_input.isel(time=idx_train)
+    ds_input_val   = ds_input.isel(time=idx_val)
+
+    ds_target_train = ds_target.isel(time=idx_train)
+    ds_target_val   = ds_target.isel(time=idx_val)
+
+    if train_ratio + val_ratio < 1:
+        ds_input_test  = ds_input.isel(time=idx_test)
+        ds_target_test  = ds_target.isel(time=idx_test)
     else:
         print('==========================================================\n'+
               'Test split ratio is zero. Test set is the same as validation set! \n' + 
@@ -441,6 +457,100 @@ def prepare_data(
     return train_data, val_data, test_data, stations, depths 
 
 
+
+def prepare_data_for_gapfilling(
+    work_dir: Path,
+    data_dir: Path,   ##Changed
+    model_dir: Path,
+    year_range: tuple[int, int],
+    groupby_daily = True,
+    stations: list[str] | None = None,
+    input_variable: list = None, 
+    target_variable: list = ["Temperature"],
+
+):
+
+    start_year, end_year = year_range
+    obs = load_ctd_data(data_dir, start_year, end_year, groupby_daily=groupby_daily)
+    if input_variable is None:
+        input_variable = target_variable
+    # Subset stations and depths
+    #print(ds.station.values)
+    if stations is not None: 
+        obs = obs.sel(station=stations)
+
+    #### For now to test but to be removed later ####
+    # print('==========================================================\n'+
+    #     'Warning! In this protocode only 4 depth points are selcted! Edit for the actual training! \n' + 
+    #     '==========================================================\n')
+    # depths = [2.5, 27.5, 52.5, 77.5]     ##Changed
+    # obs = obs.sel(depth=depths)   ##Changed
+    #################################################
+
+    
+    obs = obs[target_variable]
+    # obs = obs[[target_variable]]
+    obs = obs.expand_dims('channels', axis = -3)
+    ### Add a code to make sure only collocated variables are kept in the obs ####
+    
+    # Generate synthetic line p temperature 'model' data
+    # Replace this by loading model data
+    # ds_input = make_synthetic_linep(ds_target['time'], ds_target['station'], ds_target['depth'])
+    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year)
+    # ds_input = ds_input[[target_variable]].sel(time = obs.time, method = 'nearest')
+    
+    #### make sure model and obs have the same time range and snapshots ###
+    ds_input = ds_input[input_variable].expand_dims('channels', axis = -3)
+
+    #### NEP36_CanOE has a fine horizontal resolution to which obs has to be rewritten, and depth has to be interpolated to obs ###    
+    if 'NEP36_CanOE' in str(model_dir):
+        ds_input = ds_input.interp(depth = obs.depth, kwargs={"fill_value": "extrapolate"})
+        ds_input = ds_input.where(ds_input.lon > obs.sel(stattion = 'P23').lon, drop = True)
+    #### make sure obs and model have same depth ranges ###  
+    if ds_input.depth.max() > obs.depth.max():
+        ds_input = ds_input.where(ds_input.depth <= obs.depth.max(), drop = True)
+        bathymetry = bathymetry.where(bathymetry.depth <= obs.depth.max(), drop = True)
+    elif ds_input.depth.max() < obs.depth.max():
+        obs = obs.where(obs.depth <= ds_input.depth.max(), drop = True)
+
+
+    ### Add static variables ####
+    if bathymetry is not None:
+        if 'NEP36_CanOE' in str(model_dir):
+            bathymetry = bathymetry.interp(depth = ds_input.depth)
+            bathymetry = bathymetry.where(bathymetry == 0 , 1)
+            ds_input = ds_input.where(bathymetry == 1)
+             
+        ds_input['bathymetry'] = bathymetry.broadcast_like(ds_input[input_variable[0]])
+
+    doy = xr.DataArray(
+    (ds_input.time.values.astype('datetime64[D]') - ds_input.time.values.astype('datetime64[Y]')).astype(int) + 1,
+    dims=("time",),
+    coords={"time": ds_input.time},
+    name="DOY"
+    )
+    ds_input["sin_DOY"] = np.sin(doy/365.25*np.pi/180).broadcast_like(ds_input[input_variable[0]])
+    ds_input["cos_DOY"] = np.cos(doy/365.25*np.pi/180).broadcast_like(ds_input[input_variable[0]])
+
+    time = ds_input['time']
+    stations = ds_input['station']
+    depths = ds_input['depth']
+    lats = ds_input['lat']
+    lons  = ds_input['lon']
+    # === Split Data into train, validation, test ===
+    # Normalization
+
+    with open(work_dir / "scale_params_in.json") as f:
+        scale_params_in = json.load(f)
+    # Compute scale parameters from training data and apply to validation and test
+  # Apply same normalization to validation & test inputs
+    ds_input_norm  = apply_normalization(ds_input, scale_params_in)
+
+    # reshape data into graph structure, and compute target value mask
+    print("\nPrepare input:")
+    input_data, _ ,_ = reshape_to_tcsd(ds_input_norm, ds_input_norm)  ##ds_input_train_norm and ds_target_train_norm should have nans where data are missing
+
+    return input_data, bathymetry, time, stations, depths 
 
 
 def haversine(la0,lo0,la1,lo1):
