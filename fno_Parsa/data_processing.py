@@ -136,8 +136,10 @@ def load_model_data(model_dir, start_year, end_year):
         bathymetry =  ds['DIC'][0].where(ds['DIC'][0] == 0,1).drop(['time'])
         
     elif 'NEP10k_ROMS' in str(model_dir):
+        import gsw
         target_grid =  pd.read_csv('gridspecsHiRes.csv', comment="#")  ### Load the target grid for binning model data into 11km resolution. 
-        ds = xr.open_dataset(model_dir / 'nep_revised_hind_moave_all_subset.nc')
+        ds = xr.open_dataset(model_dir / 'nep_revised_hind_moave_all_subset_insituT.nc')
+ 
         ds['lon_rho'] = ds['lon_rho'] - 360 ### NEP10k has degrees East for longitude
         ds = ds.where((ds.lon_rho <= target_grid['lonedges_hi'].max()) & (ds.lon_rho >= target_grid['lonedges_lo'].min()) 
                       & (ds.lat_rho <= target_grid['latedges_hi'].max()) & (ds.lat_rho >= target_grid['latedges_lo'].min()), drop = True)   ### subselect NEP10k for line p to reduce data load
@@ -169,7 +171,7 @@ def load_model_data(model_dir, start_year, end_year):
     end_date = pd.Timestamp(f"{end_year+1}-01-01")
     
     ds = ds.where((ds.time >= start_date) & (ds.time < end_date), drop = True)
-    return ds.transpose('time','depth','station'), bathymetry
+    return ds.transpose('time','depth','station'), bathymetry.transpose('depth','station')
 def normalize_dataset(ds, var_methods=None):
     """
     Normalize selected variables in an xarray.Dataset for ML.

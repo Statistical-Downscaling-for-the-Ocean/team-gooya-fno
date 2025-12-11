@@ -95,7 +95,7 @@ def evaluate_model(model, test_loader, target_variable=["Temperature"], stations
         print(f"Bias: {bias:.4f} {units[trgt]}")
         print("================================\n")
 
-        with open(Path(plot_dir, "results.txt"), 'w') as f:
+        with open(Path(plot_dir, "results.txt"), 'a') as f:
             f.write(
                 "\n=== Model Evaluation Metrics ===\n" + 
                 f"\n=== target variable {trgt} ===\n" + 
@@ -175,7 +175,7 @@ def model_inference(model, test_loader, target_variable=["Temperature"], station
             x = x.to(model.device if hasattr(model, "device") else "cuda" if torch.cuda.is_available() else "cpu")  ##Changed
             out = model(x)  # [num_nodes]   ##Changed
 
-            ys_pred_full.append(out[0])
+            ys_pred_full.append(out[0].cpu())
 
     ys_pred_full = np.stack(ys_pred_full, axis=0)
 

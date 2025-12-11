@@ -87,11 +87,17 @@ def predict(work_directory, year_range = None):
     # ======= Train Model ==========
 
     save_path = work_directory / f"best_model.pth"
-
+    modes1 = model_params['modes1']
+    modes2 = model_params['modes2']
     T, C, D, S = input_data.shape  
-    model =  FNO2d(C, len(model_params['target_variable']) , model_params['width'] , model_params['modes1'], model_params['modes2'] , num_layers  = model_params['num_layers'])  ##New
-    model.load_state_dict(torch.load(save_path, map_location=torch.device('cpu')))
+    if modes1 is None: ##NEW
+        modes1  = D  
+    if modes2 is None:  ##NEW
+        modes2 = np.floor(S/2) + 1 
 
+    model =  FNO2d(C, len(model_params['target_variable']) , model_params['width'] , modes1, modes2 , num_layers  = model_params['num_layers'])  ##New
+    model.load_state_dict(torch.load(save_path, map_location=torch.device('cpu')))
+    model.to(device)
 
     test_data = make_snapshot_data(input_data, input_data, None)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
