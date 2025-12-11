@@ -356,7 +356,7 @@ def prepare_data(
     #### rewriting obs to model grid ###  
     # ds_target = xr.full_like(ds_input[[target_variable]], np.NaN)
 
-    ds_target = xr.combine_by_coords([xr.full_like(ds_input[input_variable[0]], np.NaN).to_dataset(name = trgt) for  trgt in target_variable])
+    ds_target = xr.combine_by_coords([xr.full_like(ds_input[input_variable[0]], np.NaN).to_dataset(name = trgt) for  trgt in target_variable])[target_variable]
     model_ind_closet_to_obs = [np.argmin([haversine(ds_target.lat[i].values, ds_target.lon[i].values, obs.lat[j].values, obs.lon[j].values) 
                                           for i in range(len(ds_target.station))])  for j in  range(len(obs.station))] ## extracting station locations on model grid
     
