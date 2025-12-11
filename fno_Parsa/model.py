@@ -58,19 +58,23 @@ class MLP(nn.Module):
         return x
     
 class FNOBlock(nn.Module):
-    def __init__(self, width, modes1, modes2):
+    def __init__(self, width, modes1, modes2, activation = True):
         super(FNOBlock, self).__init__()
         self.norm = (nn.InstanceNorm2d(width))
         self.spectralConv2d = (SpectralConv2d(width, width, modes1, modes2))
         self.MLP = (MLP(width, width, width))
         self.conv2d = (nn.Conv2d(width, width, 1))
+        self.activation = activation
 
     def forward(self, x):
             x = self.norm(self.spectralConv2d(self.norm(x)))
             x1 = self.MLP(x)
             x2 = self.conv2d(x)
             x = x1 + x2
-            return F.gelu(x)
+            if self.activation:
+                return F.gelu(x)
+            else:
+                return x
 
 class FNO2d(nn.Module):
     def __init__(self, in_channels, out_channels, width , modes1, modes2, num_layers  =1):
@@ -96,8 +100,9 @@ class FNO2d(nn.Module):
         self.lift = nn.Linear(in_channels + 2 , width) # input channel is 4: Mask and input mask has 2 channed + 2 grids = 4
         FNO_blocks = []
 
-        for block in range(num_layers):
+        for block in range(num_layers - 1):
             FNO_blocks.append(FNOBlock(width, self.modes1, self.modes2))
+        FNO_blocks.append(FNOBlock(width, self.modes1, self.modes2, activation=False))
         self.FNO_blocks = nn.Sequential(*FNO_blocks)
 
         self.last = MLP(width, out_channels, width * 4) # output channel is 1: u(x, y)

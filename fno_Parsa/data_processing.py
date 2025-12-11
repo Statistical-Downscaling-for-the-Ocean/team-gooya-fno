@@ -111,7 +111,7 @@ def load_ctd_data(data_dir, start_year, end_year, groupby_daily = False, bin_dep
 
     return ds.transpose('time', 'depth', 'station').sel(station=slice(None, None, -1))
 
-def load_model_data(model_dir, start_year, end_year):
+def load_model_data(model_dir, start_year, end_year, low_res = False):
     """
     Load and process model netcdf data for a given year range.
     Also creates Bathymetry.
@@ -137,14 +137,19 @@ def load_model_data(model_dir, start_year, end_year):
         
     elif 'NEP10k_ROMS' in str(model_dir):
         import gsw
-        target_grid =  pd.read_csv('gridspecsHiRes.csv', comment="#")  ### Load the target grid for binning model data into 11km resolution. 
+        if low_res:
+            target_grid =  pd.read_csv('gridspecs.csv', comment="#")  ### Load the target grid for binning model data into 11km resolution. 
+            tol = 0
+        else:
+            target_grid =  pd.read_csv('gridspecsHiRes.csv', comment="#")  ### Load the target grid for binning model data into 11km resolution.
+            tol = 0.05 
         ds = xr.open_dataset(model_dir / 'nep_revised_hind_moave_all_subset_insituT.nc')
  
         ds['lon_rho'] = ds['lon_rho'] - 360 ### NEP10k has degrees East for longitude
         ds = ds.where((ds.lon_rho <= target_grid['lonedges_hi'].max()) & (ds.lon_rho >= target_grid['lonedges_lo'].min()) 
                       & (ds.lat_rho <= target_grid['latedges_hi'].max()) & (ds.lat_rho >= target_grid['latedges_lo'].min()), drop = True)   ### subselect NEP10k for line p to reduce data load
         ls = []
-        tol = 0.05
+        
         for ind in range(len(target_grid)):
             ls.append(ds.where((ds.lon_rho <= target_grid['lonedges_hi'][ind] + tol/2) & (ds.lon_rho >= target_grid['lonedges_lo'][ind] - tol/2) 
                                & (ds.lat_rho <= target_grid['latedges_hi'][ind] + tol/2) & (ds.lat_rho >= target_grid['latedges_lo'][ind] - tol/2), drop = True).mean(('xi_rho', 'eta_rho')))  ### Bin NEP10k at the reference grid locations loaded above
@@ -193,7 +198,8 @@ def normalize_dataset(ds, var_methods=None):
         "Latitude": None,
         "Longitude": None,
         "sin_DOY" : None,
-        "cos_DOY" : None
+        "cos_DOY" : None,
+        'mask_target' : None
     }
 
     if var_methods is None:
@@ -295,6 +301,7 @@ def prepare_data(
     # bathymetry_in : xr.DataArray | None = None,  ##Changed
     train_ratio = 0.7,  ##Changed
     val_ratio = 0.15,   ##Changed
+    low_res = False
 
 
 ):
@@ -325,7 +332,7 @@ def prepare_data(
     # Generate synthetic line p temperature 'model' data
     # Replace this by loading model data
     # ds_input = make_synthetic_linep(ds_target['time'], ds_target['station'], ds_target['depth'])
-    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year)
+    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year, low_res=low_res)
     # ds_input = ds_input[[target_variable]].sel(time = obs.time, method = 'nearest')
     
     #### make sure model and obs have the same time range and snapshots ###
@@ -469,7 +476,7 @@ def prepare_data_for_gapfilling(
     stations: list[str] | None = None,
     input_variable: list = None, 
     target_variable: list = ["Temperature"],
-
+    low_res = False,
 ):
 
     start_year, end_year = year_range
@@ -498,7 +505,7 @@ def prepare_data_for_gapfilling(
     # Generate synthetic line p temperature 'model' data
     # Replace this by loading model data
     # ds_input = make_synthetic_linep(ds_target['time'], ds_target['station'], ds_target['depth'])
-    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year)
+    ds_input, bathymetry = load_model_data(model_dir, start_year, end_year, low_res = low_res)
     # ds_input = ds_input[[target_variable]].sel(time = obs.time, method = 'nearest')
     
     #### make sure model and obs have the same time range and snapshots ###

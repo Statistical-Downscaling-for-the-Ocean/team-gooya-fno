@@ -28,19 +28,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
-def main(output_directory, data_directory, model_directory, n_epochs, batch_size, lr , wd, reduction, early_stoppng_buffer ):
+def main(output_directory, data_directory, model_directory, n_epochs, batch_size, lr , wd, reduction, early_stopping_buffer ):
     # ======= model architecture setup ==========
     width = 20
     num_layers = 5
-    modes1 = 5
-    modes2 = 5
+    modes1 = None
+    modes2 = None
     # ======= data setup ==========
-    input_variable = ["Temperature"]
-    target_variable = ["Temperature"]
+    input_variable = ["Temperature", "Salinity"]
+    target_variable = ["Oxygen"]
     year_range = (1990,2025)
+    low_res = True
     # === Prepare Data ===
-    # main_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/FNO"
-    # data_dir = "/fs/site5/eccc/crd/ccrn/users/rpg002/stat_downscaling-workshop/data" 
     if input_variable is None:
         input_variable = target_variable
 
@@ -51,7 +50,10 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
     formatted = now.strftime("%Y-%m-%d-%H:%M")
 
     print(f'Started run with id : {formatted}')
-    work_directory = output_directory / f'{formatted}-{model_name}-modes-{modes1}-{modes2}-{input_name}_to_{target_name}_insitu'
+    if low_res:
+        work_directory = output_directory / f'{formatted}-{model_name}-modes-{modes1}-{modes2}-{input_name}_to_{target_name}_insitu_lowress'
+    else:
+        work_directory = output_directory / f'{formatted}-{model_name}-modes-{modes1}-{modes2}-{input_name}_to_{target_name}_insitu'
 
     Path(work_directory).mkdir(parents=True, exist_ok=True)
     
@@ -64,8 +66,9 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
         # stations=["P22", "P23", "P24", "P25", "P26"],
         input_variable = input_variable,
         target_variable=target_variable,
-        train_ratio=0.7, ##Changed
-        val_ratio=0.15  ##Changed
+        train_ratio=0.85, ##Changed
+        val_ratio=0.15 , ##Changed
+        low_res = low_res
     )
 
 
@@ -82,17 +85,18 @@ def main(output_directory, data_directory, model_directory, n_epochs, batch_size
             f"lr\t{lr}\n" +
             f"wd\t{wd}\n" +
             f"reduction\t{reduction}\n" +
-            f"early_stoppng_buffer\t{early_stoppng_buffer}\n"  +
+            f"early_stopping_buffer\t{early_stopping_buffer}\n"  +
             f"input_variable\t{input_variable}\n"  +
             f"target_variable\t{target_variable}\n"  +
             f"data_dir\t{str(data_directory)}\n"  + 
-            f"model_dir\t{str(model_directory)}\n"            
+            f"model_dir\t{str(model_directory)}\n"  + 
+            f"low_res\t{low_res}\n"          
         )
 
     # ======= Train Model ==========
     try: ##Changed
         save_path = work_directory / f"best_model.pth"
-        model, train_losses, val_losses, best_val_mse = train_model(train_data, val_data, width = width, num_layers = num_layers, modes1 = modes1, modes2 = modes2, batch_size = batch_size, n_epochs=n_epochs, lr=lr, wd= wd, reduction = reduction, early_stoppng_buffer = early_stoppng_buffer, save_path=save_path) ##Changed
+        model, train_losses, val_losses, best_val_mse = train_model(train_data, val_data, width = width, num_layers = num_layers, modes1 = modes1, modes2 = modes2, batch_size = batch_size, n_epochs=n_epochs, lr=lr, wd= wd, reduction = reduction, early_stopping_buffer = early_stopping_buffer, save_path=save_path) ##Changed
     except Exception as e: ##Changed
         import shutil  ##Changed
         Path(output_directory / 'failed_cases').mkdir(parents=True, exist_ok=True)  ##Changed
@@ -138,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", help="learning rate", default=1e-3, type=float)
     parser.add_argument("--wd", help="weight decay", default=1e-5, type=float)
     parser.add_argument("--reduction", help="MSE reduction method", default="mean_snap")
-    parser.add_argument("--early_stoppng_buffer", help="Number of epochs for early stoppng buffer (int or None)", default=None, type=int)
+    parser.add_argument("--early_stopping_buffer", help="Number of epochs for early stopping buffer (int or None)", default=None, type=int)
 
     args = parser.parse_args()
-    main(Path(args.output_directory), Path(args.data_directory), Path(args.model_directory), args.n_epochs, args.batch_size, args.lr, args.wd , args.reduction, args.early_stoppng_buffer  )
+    main(Path(args.output_directory), Path(args.data_directory), Path(args.model_directory), args.n_epochs, args.batch_size, args.lr, args.wd , args.reduction, args.early_stopping_buffer  )

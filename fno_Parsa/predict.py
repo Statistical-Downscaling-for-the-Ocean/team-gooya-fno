@@ -61,7 +61,7 @@ def extract_params(model_dir):
                     params[key] = value
     return params
 
-def predict(work_directory, year_range = None):
+def predict(work_directory, year_range = None, low_res = False):
 
     model_params = extract_params(work_directory)
     
@@ -71,6 +71,17 @@ def predict(work_directory, year_range = None):
     model_directory =  Path(model_params['model_dir'])
     if year_range is None:
         year_range = model_params['year_range']
+    
+    if low_res != model_params['low_res']:
+            D = 850
+            if model_params['low_res']:
+                reschange = 'LowtoHigh'
+                S = 38 
+            else:
+                reschange = 'HightoLow'
+                S = 114 
+    else:
+        reschange = 'SameRes'
     # data_dir = Path(data_dir)
     # === Prepare Data ===
     input_data, bathymetry ,times, stations, depths = prepare_data_for_gapfilling(
@@ -81,6 +92,7 @@ def predict(work_directory, year_range = None):
         # stations=["P22", "P23", "P24", "P25", "P26"],
         input_variable = input_variable,
         target_variable=target_variable,
+        low_res = low_res
     )
 
 
@@ -89,13 +101,13 @@ def predict(work_directory, year_range = None):
     save_path = work_directory / f"best_model.pth"
     modes1 = model_params['modes1']
     modes2 = model_params['modes2']
-    T, C, D, S = input_data.shape  
+
     if modes1 is None: ##NEW
         modes1  = D  
     if modes2 is None:  ##NEW
         modes2 = np.floor(S/2) + 1 
 
-    model =  FNO2d(C, len(model_params['target_variable']) , model_params['width'] , modes1, modes2 , num_layers  = model_params['num_layers'])  ##New
+    model =  FNO2d(input_data.shape[1], len(model_params['target_variable']) , model_params['width'] , modes1, modes2 , num_layers  = model_params['num_layers'])  ##New
     model.load_state_dict(torch.load(save_path, map_location=torch.device('cpu')))
     model.to(device)
 
@@ -124,16 +136,18 @@ def predict(work_directory, year_range = None):
             "depth": depths.values
         },
     )
+
     ds = ds.where(bathymetry == 1)
     model_name = str(model_directory).split('/')[-1]
-    ds.to_netcdf(work_directory / f'gapfilled_lineP_{model_name}_grid_{year_range[0]}_{year_range[1]}.nc')
+    ds.to_netcdf(work_directory / f'gapfilled_lineP_{model_name}_grid_{year_range[0]}_{year_range[1]}_{reschange}.nc')
 
     print(f'Finished at :\n {work_directory}')
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Inferencen for downscaling Line P data using Fourier neural operator ")
     parser.add_argument("--work_directory", help="Directory where model is saved")
-    parser.add_argument("--year_range", help="inference period", type=tuple)
+    parser.add_argument("--year_range", help="inference period", type=tuple, default=None)
+    parser.add_argument("--low_res", help="predict on lower resolution?", type=bool, default=False)
 
     args = parser.parse_args()
-    predict(Path(args.work_directory) , args.year_range)
+    predict(Path(args.work_directory) , args.year_range,  args.low_res)
